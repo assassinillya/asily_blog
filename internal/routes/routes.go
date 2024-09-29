@@ -6,7 +6,9 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
-	r.POST("/test", handlers.Test)
-	//r.POST("/blogs", handlers.CreateBlog)
+	r.POST("/blog/test", handlers.Test)
+	r.POST("/blog/insertBlog", handlers.InsertBlog)
+	r.PUT("/blog/viewAdd", handlers.ViewAdd)
+	r.PUT("/blog/reSetBlog", handlers.ReSetBlog)
 	// 更多路由...
 }

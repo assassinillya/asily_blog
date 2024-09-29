@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
-func Test(c *gin.Context) {
-	// 用户注册逻辑
-	c.JSON(http.StatusOK, gin.H{"message": "test!test!"})
+// TODO 设计jwt登录, 登出接口
+
+func User(c *gin.Context) {
+
 }
