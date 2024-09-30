@@ -9,6 +9,14 @@ import (
 )
 
 func main() {
+
+	//configPath := "./config.json"
+	//cfg, err := config.LoadConfig(configPath)
+	//if err != nil {
+	//	fmt.Printf("Error loading config: %v\n", err)
+	//	return
+	//}
+
 	// 初始化日志
 	logger.InitLogger()
 

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"asily_blog/pkg/config"
 	"context"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -12,7 +13,7 @@ var client *mongo.Client
 // ConnectDB 连接到 MongoDB 数据库
 func ConnectDB() {
 	var err error
-	clientOptions := options.Client().ApplyURI("mongodb://120.78.234.30:27017")
+	clientOptions := options.Client().ApplyURI("mongodb://" + config.C.MongoDB)
 
 	client, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {

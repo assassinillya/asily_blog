@@ -59,13 +59,17 @@ func InsertBlog(c *gin.Context) {
 		}
 	}
 
-	_, err1 := db.InsertOne(context.Background(), data)
+	result, err1 := db.InsertOne(context.Background(), data)
 	if err1 != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "插入成功"})
+	// TODO 查询_id并返回
+	c.JSON(http.StatusOK, gin.H{
+		"message": "插入成功",
+		"_id":     result.InsertedID,
+	})
 }
 
 func ViewAdd(c *gin.Context) {

@@ -9,6 +9,10 @@ type Config struct {
 	Server struct {
 		Port string `json:"port"`
 	} `json:"server"`
+	User         string `json:"user"`
+	Password     string `json:"password"`
+	MongoDB      string `json:"mongodb"`
+	AccessSecret string `json:"accessSecret"`
 }
 
 var C Config
