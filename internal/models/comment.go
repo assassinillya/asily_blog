@@ -12,4 +12,5 @@ type Comment struct {
 	QQ        string             `bson:"qq" json:"qq"`
 	Content   string             `bson:"content" json:"content"`
 	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+	Like      int                `json:"like" bson:"like"`
 }

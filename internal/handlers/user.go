@@ -7,9 +7,8 @@ import (
 	"net/http"
 )
 
-// TODO 设计jwt登录, 登出接口
-
 func Login(c *gin.Context) {
+	// 没有设置Logout接口, 因为只有一个用户
 	var user struct {
 		Username string `json:"username"`
 		Password string `json:"password"`

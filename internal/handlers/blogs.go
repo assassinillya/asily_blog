@@ -65,13 +65,13 @@ func InsertBlog(c *gin.Context) {
 		return
 	}
 
-	// TODO 查询_id并返回
 	c.JSON(http.StatusOK, gin.H{
 		"message": "插入成功",
 		"_id":     result.InsertedID,
 	})
 }
 
+// ViewAdd 阅读量增加 疑似写了没用
 func ViewAdd(c *gin.Context) {
 	db := utils.GetCollection("blogs")
 	var data struct {
@@ -96,6 +96,7 @@ func ViewAdd(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
 }
 
+// ReSetBlog 编辑文档
 func ReSetBlog(c *gin.Context) {
 	db := utils.GetCollection("blogs")
 	var data models.Blog
@@ -182,4 +183,39 @@ func ReSetBlog(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+}
+
+func GetBlog(c *gin.Context) {
+	db := utils.GetCollection("blogs")
+	var data struct {
+		Id string `json:"_id"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	id, _ := primitive.ObjectIDFromHex(data.Id)
+
+	var blog models.Blog
+
+	ok := db.FindOne(context.Background(), bson.M{"_id": id}).Decode(&blog)
+	blog.Views++ // 给当前的博客加上当前阅读量
+
+	if ok != nil {
+		c.JSON(http.StatusOK, gin.H{"err": "找不到此博客"})
+		return
+	}
+
+	update := bson.M{
+		"$inc": bson.M{"views": 1},
+	}
+
+	_, err := db.UpdateByID(context.Background(), id, update)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "更新失败, 原因:" + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": blog})
+
 }
