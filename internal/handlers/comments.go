@@ -16,12 +16,12 @@ func AddComment(c *gin.Context) {
 	db := utils.GetCollection("comments")
 	var data struct {
 		Id       string `json:"_id"`
-		Context  string `json:"context"`
+		Content  string `json:"content"`
 		QQ       string `json:"qq"`
 		Username string `json:"username"`
 	}
 	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -31,7 +31,7 @@ func AddComment(c *gin.Context) {
 		BlogID:    id,
 		Username:  data.Username,
 		QQ:        data.QQ,
-		Content:   data.Context,
+		Content:   data.Content,
 		CreatedAt: time.Now(),
 		Like:      0,
 	}
@@ -48,6 +48,30 @@ func AddComment(c *gin.Context) {
 // GetComments 获取所有评论
 func GetComments(c *gin.Context) {
 
+}
+
+// ResetComments 编辑评论
+func ResetComments(c *gin.Context) {
+	db := utils.GetCollection("comments")
+	var data struct {
+		Id      string `json:"_id"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	id, _ := primitive.ObjectIDFromHex(data.Id)
+
+	_, err := db.UpdateByID(context.Background(), id, bson.M{
+		"$set": bson.M{"content": data.Content},
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"err": "评论编辑失败" + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "评论编辑成功"})
 }
 
 // DeleteComments 删除评论

@@ -135,7 +135,7 @@ func ReSetBlog(c *gin.Context) {
 			},
 		})
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "删除原tag失败:=, 失败原因:" + err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "删除原tag失败, 失败原因:" + err.Error()})
 			return
 		}
 	}
@@ -218,4 +218,71 @@ func GetBlog(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": blog})
 
+}
+
+func DeleteBlog(c *gin.Context) {
+	db := utils.GetCollection("blogs")
+	var data struct {
+		Id string `json:"_id"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	id, _ := primitive.ObjectIDFromHex(data.Id)
+
+	// 查询他原来的Tag并删除
+	db1 := utils.GetCollection("tags")
+
+	var blog models.Blog
+	err := db.FindOne(context.Background(), bson.M{"_id": id}).Decode(&blog)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "查询原博客失败, 原因:" + err.Error()})
+		return
+	}
+
+	for _, tag := range blog.Tags {
+		ok := db1.FindOne(context.Background(), bson.M{"name": tag})
+		if ok.Err() != nil {
+			// 找不到这个tag
+			c.JSON(http.StatusBadRequest, gin.H{"error": "找不到原tag"})
+			return
+		}
+		_, err1 := db1.UpdateOne(context.Background(), bson.M{
+			"name": tag,
+		}, bson.M{
+			"$inc": bson.M{
+				"count": -1,
+			},
+		})
+		if err1 != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "删除原tag失败, 失败原因:" + err1.Error()})
+			return
+		}
+	}
+
+	// 删除博客
+	_, err2 := db.DeleteOne(context.Background(), bson.M{"_id": id})
+	if err2 != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "删除博客失败, 失败原因:" + err2.Error()})
+		// 恢复tag
+		for _, tag := range blog.Tags {
+			_, err1 := db1.UpdateOne(context.Background(), bson.M{
+				"name": tag,
+			}, bson.M{
+				"$inc": bson.M{
+					"count": 1,
+				},
+			})
+			if err1 != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":   "添加原tag失败, 失败原因:" + err1.Error(),
+					"message": "失败tag:" + tag,
+				})
+			}
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "成功删除博客: " + blog.Title})
 }
