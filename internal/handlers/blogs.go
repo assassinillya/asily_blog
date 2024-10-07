@@ -8,7 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -285,4 +287,75 @@ func DeleteBlog(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "成功删除博客: " + blog.Title})
+}
+
+type rep struct {
+	ID        string    `bson:"_id,omitempty" json:"_id"`
+	Title     string    `bson:"title" json:"title"`
+	Tags      []string  `bson:"tags" json:"tags"` // 标签数组
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
+	Views     int       `bson:"views" json:"views"` // 阅读量
+}
+
+func GetBlogs(c *gin.Context) {
+	db := utils.GetCollection("blogs")
+
+	pageStr := c.Param("page")
+	limitStr := c.Param("limit")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的每页数量"})
+		return
+	}
+
+	limit, err1 := strconv.Atoi(limitStr)
+	if err1 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的每页数量"})
+		return
+	}
+
+	if page <= 0 || limit <= 0 {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的查询"})
+		return
+	}
+
+	skip := (page - 1) * limit
+
+	option := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit))
+
+	cursor, err2 := db.Find(context.Background(), bson.D{}, option)
+	if err2 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "查询失败, 原因: " + err2.Error()})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var blogs []rep
+
+	for cursor.Next(context.Background()) {
+		var blog models.Blog
+		if err3 := cursor.Decode(&blog); err3 != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "解码失败: " + err3.Error()})
+			return
+		}
+
+		blogs = append(blogs, rep{
+			ID:        blog.ID,
+			Title:     blog.Title,
+			Tags:      blog.Tags,
+			CreatedAt: blog.CreatedAt,
+			UpdatedAt: blog.UpdatedAt,
+			Views:     blog.Views,
+		})
+	}
+
+	if err4 := cursor.Err(); err4 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "游标错误: " + err4.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"blogs": blogs})
+
 }

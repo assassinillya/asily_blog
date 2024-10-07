@@ -7,7 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net/http"
+	"strconv"
 )
 
 func AddLink(c *gin.Context) {
@@ -103,11 +105,35 @@ func UpdateLink(c *gin.Context) {
 func GetLinks(c *gin.Context) {
 	db := utils.GetCollection("friendLinks")
 
+	pageStr := c.Param("page")
+	limitStr := c.Param("limit")
+
+	page, err1 := strconv.Atoi(pageStr)
+	if err1 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的页码"})
+		return
+	}
+
+	limit, err1 := strconv.Atoi(limitStr)
+	if err1 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的每页数量"})
+		return
+	}
+
+	if page <= 0 || limit <= 0 {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的查询"})
+		return
+	}
+
+	skip := (page - 1) * limit
+
 	var links []models.FriendLink
 
-	cursor, err := db.Find(context.Background(), bson.D{})
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"error": "查询失败: " + err.Error()})
+	option := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit))
+
+	cursor, err1 := db.Find(context.Background(), bson.D{}, option)
+	if err1 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "查询失败: " + err1.Error()})
 		return
 	}
 	defer cursor.Close(context.Background())
@@ -115,8 +141,8 @@ func GetLinks(c *gin.Context) {
 	// 遍历游标并解码每个文档
 	for cursor.Next(context.Background()) {
 		var link models.FriendLink
-		if err1 := cursor.Decode(&link); err1 != nil {
-			c.JSON(http.StatusOK, gin.H{"error": "解码失败: " + err1.Error()})
+		if err2 := cursor.Decode(&link); err2 != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "解码失败: " + err2.Error()})
 			return
 		}
 		links = append(links, link)

@@ -7,7 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -124,4 +126,63 @@ func LikeComment(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "评论点赞成功"})
+}
+
+func GetComment(c *gin.Context) {
+	db := utils.GetCollection("comments")
+
+	blogStr := c.Param("blog")
+	pageStr := c.Param("page")
+	limitStr := c.Param("limit")
+
+	blog, _ := primitive.ObjectIDFromHex(blogStr)
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的页码"})
+		return
+	}
+
+	limit, err1 := strconv.Atoi(limitStr)
+	if err1 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的每页数量"})
+		return
+	}
+
+	if page <= 0 || limit <= 0 {
+		c.JSON(http.StatusOK, gin.H{"error": "无效的查询"})
+		return
+	}
+
+	skip := (page - 1) * limit
+
+	var comments []models.Comment
+
+	option := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit))
+
+	cursor, err2 := db.Find(context.Background(), bson.M{"blogId": blog}, option)
+	if err2 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "查询失败: " + err2.Error()})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	// 遍历游标并解码每个文档
+	for cursor.Next(context.Background()) {
+		var comment models.Comment
+		if err3 := cursor.Decode(&comment); err3 != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "解码失败: " + err3.Error()})
+			return
+		}
+		comments = append(comments, comment)
+	}
+
+	// 检查游标遍历过程中的错误
+	if err4 := cursor.Err(); err4 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "游标错误: " + err4.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"comments": comments})
+
 }
