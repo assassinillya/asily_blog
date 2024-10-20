@@ -20,23 +20,29 @@ func SetupRoutes(r *gin.Engine) {
 	}
 	r.PUT("/blog/viewAdd", handlers.ViewAdd)                // 博客阅读量增加 弃用(包含在查看当前博客接口中)
 	r.GET("/tags", handlers.Tags)                           // 获取所有Tag
-	r.GET("/blog/getBlog", handlers.GetBlog)                // 查看当前博客
+	r.GET("/blog/getBlog/:blogId", handlers.GetBlog)        // 查看当前博客
 	r.GET("/blog/getBlogs/:page/:limit", handlers.GetBlogs) // 分页查询所有博客
+	r.GET("/blog/getBlogs/count", handlers.GetBlogCount)    // 查询所有博客总数
+	r.POST("/blog/getBlogs/search", handlers.SearchBlogs)   // 模糊匹配博客
 
 	// 评论模块
 	r.DELETE("/comments/delete", handlers.DeleteComments)          // 删除评论
 	r.POST("/comments/add", handlers.AddComment)                   // 添加评论
 	r.PUT("/comments/like", handlers.LikeComment)                  // 点赞评论
+	r.PUT("/comments/unlike", handlers.UnLikeComment)              // 取消点赞评论
 	r.PUT("/comments/reset", handlers.ResetComments)               // 编辑评论
 	r.GET("/comments/get/:blog/:page/:limit", handlers.GetComment) // 查询评论
+	r.GET("/comments/get/count/:blog", handlers.GetCommentCount)   // 查询评论
 
 	// 友情链接模块
 	protected1 := r.Group("/friendLink").Use(middleware.JWTAuthMiddleware(config.C.AccessSecret))
 	{
-		protected1.POST("/add", handlers.AddLink)
+		//protected1.POST("/add", handlers.AddLink)
 		protected1.DELETE("/delete", handlers.DeleteLink)
 		protected1.PUT("/update", handlers.UpdateLink)
-		protected1.GET("/get/:page/:limit", handlers.GetLinks)
+		//protected1.GET("/get/:page/:limit", handlers.GetLinks)
 	}
+	r.GET("/friendLink/get/:page/:limit", handlers.GetLinks) // 查询友情链接
+	r.POST("/friendLink/add", handlers.AddLink)
 
 }

@@ -189,14 +189,26 @@ func ReSetBlog(c *gin.Context) {
 
 func GetBlog(c *gin.Context) {
 	db := utils.GetCollection("blogs")
-	var data struct {
-		Id string `json:"_id"`
-	}
-	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	id, _ := primitive.ObjectIDFromHex(data.Id)
+
+	blogIdStr := c.Param("blogId")
+
+	//blogId, err := strconv.Atoi(blogIdStr)
+	//if err != nil {
+	//	c.JSON(http.StatusOK, gin.H{"error": "无效的博客id"})
+	//	return
+	//}
+
+	//var data struct {
+	//	Id string `json:"_id"`
+	//}
+	//if err := c.ShouldBindJSON(&data); err != nil {
+	//	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	//	return
+	//}
+
+	//id, _ := primitive.ObjectIDFromHex(data.Id)
+	id, _ := primitive.ObjectIDFromHex(blogIdStr)
+	//id := blogId
 
 	var blog models.Blog
 
@@ -358,4 +370,78 @@ func GetBlogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"blogs": blogs})
 
+}
+
+func GetBlogCount(c *gin.Context) {
+	db := utils.GetCollection("blogs")
+	count, err := db.CountDocuments(context.Background(), bson.D{{}})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"error": "查询博客数量失败, 失败原因:" + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": count})
+}
+
+func SearchBlogs(c *gin.Context) {
+	db := utils.GetCollection("blogs")
+
+	var data struct {
+		Search string `json:"search"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
+		return
+	}
+
+	searchStr := data.Search
+
+	filter := bson.D{}
+	if searchStr != "" {
+		// 使用正则表达式模糊匹配标题
+		filter = bson.D{
+			{"$or", bson.A{
+				bson.D{{"title", bson.M{"$regex": primitive.Regex{Pattern: searchStr, Options: "i"}}}},
+				bson.D{{"tags", bson.M{"$regex": primitive.Regex{Pattern: searchStr, Options: "i"}}}},
+			}},
+		}
+	}
+	//else{
+	//	c.JSON(http.StatusOK, gin.H{"error": "查询失败: 没有检索条件"})
+	//	return
+	//}
+
+	cursor, err := db.Find(context.Background(), filter)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "查询失败, 原因: " + err.Error()})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var blogs []rep
+
+	for cursor.Next(context.Background()) {
+		var blog models.Blog
+		if err1 := cursor.Decode(&blog); err1 != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "解码失败: " + err1.Error()})
+			return
+		}
+
+		blogs = append(blogs, rep{
+			ID:        blog.ID,
+			Title:     blog.Title,
+			Tags:      blog.Tags,
+			CreatedAt: blog.CreatedAt,
+			UpdatedAt: blog.UpdatedAt,
+			Views:     blog.Views,
+		})
+	}
+
+	if err2 := cursor.Err(); err2 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "游标错误: " + err2.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"blogs": blogs})
 }

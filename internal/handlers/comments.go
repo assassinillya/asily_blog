@@ -47,11 +47,6 @@ func AddComment(c *gin.Context) {
 
 }
 
-// GetComments 获取所有评论
-func GetComments(c *gin.Context) {
-
-}
-
 // ResetComments 编辑评论
 func ResetComments(c *gin.Context) {
 	db := utils.GetCollection("comments")
@@ -128,6 +123,44 @@ func LikeComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "评论点赞成功"})
 }
 
+func UnLikeComment(c *gin.Context) {
+	db := utils.GetCollection("comments")
+	var data struct {
+		Id string `json:"_id"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	id, _ := primitive.ObjectIDFromHex(data.Id)
+
+	var comment models.Comment
+
+	err1 := db.FindOne(context.Background(), bson.M{"_id": id}).Decode(&comment)
+
+	if err1 != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "该评论不存在"})
+		return
+	}
+
+	if comment.Like <= 0 {
+		c.JSON(http.StatusOK, gin.H{"error": "点赞数量不能为负数"})
+		return
+	}
+
+	_, err := db.UpdateByID(context.Background(), id, bson.M{
+		"$inc": bson.M{
+			"like": -1,
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "点赞失败 " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "评论取消点赞成功"})
+}
+
 func GetComment(c *gin.Context) {
 	db := utils.GetCollection("comments")
 
@@ -185,4 +218,20 @@ func GetComment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"comments": comments})
 
+}
+
+func GetCommentCount(c *gin.Context) {
+
+	db := utils.GetCollection("comments")
+
+	blogStr := c.Param("blog")
+
+	blog, _ := primitive.ObjectIDFromHex(blogStr)
+
+	count, err := db.CountDocuments(context.Background(), bson.M{"blogId": blog})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "搜索评论总数出现错误, 错误原因: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": count})
 }

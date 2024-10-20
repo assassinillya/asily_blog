@@ -89,6 +89,7 @@ func UpdateLink(c *gin.Context) {
 	_, err := db.UpdateOne(context.Background(), bson.M{"_id": id}, bson.M{
 		"$set": bson.M{
 			"name":        data.Name,
+			"avatar":      data.Avatar,
 			"url":         data.URL,
 			"description": data.Description,
 		},
@@ -154,5 +155,5 @@ func GetLinks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"links": links})
+	c.JSON(http.StatusOK, gin.H{"message": links})
 }
