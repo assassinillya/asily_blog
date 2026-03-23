@@ -6,11 +6,13 @@ import (
 )
 
 type Comment struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	BlogID    primitive.ObjectID `bson:"blogId" json:"blogId"` // 关联的博客ID
-	Username  string             `bson:"username" json:"username"`
-	QQ        string             `bson:"qq" json:"qq"`
-	Content   string             `bson:"content" json:"content"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
-	Like      int                `json:"like" bson:"like"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	BlogID      primitive.ObjectID `bson:"blogId" json:"blogId"` // 关联的博客ID
+	Username    string             `bson:"username" json:"username"`
+	QQ          string             `bson:"qq" json:"qq"`
+	Content     string             `bson:"content" json:"content"`
+	CreatedAt   time.Time          `bson:"createdAt" json:"createdAt"`
+	Like        int                `json:"like" bson:"like"`
+	LikeCount   int                `json:"likeCount" bson:"likeCount"`
+	UnLikeCount int                `json:"unlikeCount" bson:"unlikeCount"`
 }

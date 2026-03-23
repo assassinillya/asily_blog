@@ -56,23 +56,30 @@ func AddComment(c *gin.Context) {
 
 	// 创建评论模型
 	comment := models.Comment{
-		BlogID:    blogID,
-		Username:  data.Username,
-		QQ:        data.QQ, // QQ可以为空
-		Content:   data.Content,
-		CreatedAt: time.Now(),
-		Like:      0,
+		BlogID:      blogID,
+		Username:    data.Username,
+		QQ:          data.QQ, // QQ可以为空
+		Content:     data.Content,
+		CreatedAt:   time.Now(),
+		Like:        0,
+		LikeCount:   0,
+		UnLikeCount: 0,
 	}
 
 	// 插入评论
 	commentsDB := utils.GetCollection("comments")
-	_, err = commentsDB.InsertOne(context.Background(), comment)
+	result, err := commentsDB.InsertOne(context.Background(), comment)
 	if err != nil {
 		// 状态码修正：服务器内部错误应返回 500
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "评论插入失败: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "评论插入成功"})
+
+	insertedID, _ := result.InsertedID.(primitive.ObjectID)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "评论插入成功",
+		"id":      insertedID.Hex(),
+	})
 }
 
 // ResetComments 编辑评论 (通常只有管理员或评论所有者可以编辑)
@@ -166,7 +173,10 @@ func LikeComment(c *gin.Context) {
 	// 优化：直接使用 UpdateByID 并检查其结果，无需预先查询
 	db := utils.GetCollection("comments")
 	result, err := db.UpdateByID(context.Background(), id, bson.M{
-		"$inc": bson.M{"like": 1},
+		"$inc": bson.M{
+			"like":      1,
+			"likeCount": 1,
+		},
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "点赞失败: " + err.Error()})
@@ -208,7 +218,10 @@ func UnLikeComment(c *gin.Context) {
 		"like": bson.M{"$gt": 0}, // 只有当 like 大于 0 时才匹配
 	}
 	update := bson.M{
-		"$inc": bson.M{"like": -1},
+		"$inc": bson.M{
+			"like":        -1,
+			"unlikeCount": 1,
+		},
 	}
 
 	result, err := db.UpdateOne(context.Background(), filter, update)
@@ -293,7 +306,20 @@ func GetComment(c *gin.Context) {
 		comments = []models.Comment{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"comments": comments})
+	total, err := db.CountDocuments(context.Background(), bson.M{"blogId": blogID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询评论总数失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"list": comments,
+		"pagination": gin.H{
+			"page":  page,
+			"limit": limit,
+			"total": total,
+		},
+	})
 }
 
 // GetCommentCount 获取某篇博客的评论总数

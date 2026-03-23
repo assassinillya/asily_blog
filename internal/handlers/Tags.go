@@ -49,6 +49,8 @@ func GetTags(c *gin.Context) {
 		tags = []models.Tag{}
 	}
 
-	// 返回结构优化：直接返回包含标签的键，而不是放在 "message" 中
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	c.JSON(http.StatusOK, gin.H{
+		"total": len(tags),
+		"list":  tags,
+	})
 }

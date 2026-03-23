@@ -288,12 +288,13 @@ func DeleteBlog(c *gin.Context) {
 
 // rep 是用于 GetBlogs 接口返回的博客列表的简化结构体
 type rep struct {
-	ID        string    `json:"_id"` // BSON的omitempty在这里不需要
-	Title     string    `json:"title"`
-	Tags      []string  `json:"tags"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Views     int       `json:"views"`
+	ID           string    `json:"_id"` // BSON的omitempty在这里不需要
+	Title        string    `json:"title"`
+	Tags         []string  `json:"tags"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Views        int       `json:"views"`
+	CommentCount int64     `json:"commentCount"`
 }
 
 type blogDetail struct {
@@ -310,6 +311,39 @@ type pagination struct {
 	Page  int   `json:"page"`
 	Limit int   `json:"limit"`
 	Total int64 `json:"total"`
+}
+
+func getCommentCountsByBlogIDs(blogIDs []primitive.ObjectID) (map[string]int64, error) {
+	commentCounts := make(map[string]int64, len(blogIDs))
+	if len(blogIDs) == 0 {
+		return commentCounts, nil
+	}
+
+	commentsDB := utils.GetCollection("comments")
+	cursor, err := commentsDB.Aggregate(context.Background(), mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"blogId": bson.M{"$in": blogIDs}}}},
+		{{Key: "$group", Value: bson.M{"_id": "$blogId", "count": bson.M{"$sum": 1}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = cursor.Close(context.Background())
+	}()
+
+	var result []struct {
+		ID    primitive.ObjectID `bson:"_id"`
+		Count int64              `bson:"count"`
+	}
+	if err = cursor.All(context.Background(), &result); err != nil {
+		return nil, err
+	}
+
+	for _, item := range result {
+		commentCounts[item.ID.Hex()] = item.Count
+	}
+
+	return commentCounts, nil
 }
 
 // GetBlogs 获取博客列表（分页）
@@ -350,12 +384,18 @@ func GetBlogs(c *gin.Context) {
 	}()
 
 	var blogs []rep
+	var blogIDs []primitive.ObjectID
 	// 遍历游标
 	for cursor.Next(context.Background()) {
 		var blog models.Blog
 		if err := cursor.Decode(&blog); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "解码博客数据失败: " + err.Error()})
 			return
+		}
+
+		blogObjectID, err := primitive.ObjectIDFromHex(blog.ID)
+		if err == nil {
+			blogIDs = append(blogIDs, blogObjectID)
 		}
 
 		blogs = append(blogs, rep{
@@ -379,6 +419,18 @@ func GetBlogs(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询博客总数失败: " + err.Error()})
 		return
+	}
+
+	commentCounts, err := getCommentCountsByBlogIDs(blogIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询评论数量失败: " + err.Error()})
+		return
+	}
+
+	for i := range blogs {
+		if count, ok := commentCounts[blogs[i].ID]; ok {
+			blogs[i].CommentCount = count
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -420,6 +472,7 @@ func SearchBlogs(c *gin.Context) {
 		{"$or", bson.A{
 			bson.D{{"title", bson.M{"$regex": primitive.Regex{Pattern: searchStr, Options: "i"}}}},
 			bson.D{{"tags", bson.M{"$regex": primitive.Regex{Pattern: searchStr, Options: "i"}}}},
+			bson.D{{"content", bson.M{"$regex": primitive.Regex{Pattern: searchStr, Options: "i"}}}},
 		}},
 	}
 
@@ -443,5 +496,9 @@ func SearchBlogs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"blogs": blogs})
+	c.JSON(http.StatusOK, gin.H{
+		"keyword": searchStr,
+		"total":   len(blogs),
+		"list":    blogs,
+	})
 }
