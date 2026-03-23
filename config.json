@@ -3,7 +3,7 @@
     "port": "8081"
   },
   "user": "asily",
-  "password": "123456",
+  "password": "$2a$10$TOUOuSBmb2w7E50u1SuF/Ow31v3Y50PMluUa7ypQc6vVeZ6D0CCZe",
   "mongodb": "localhost:27017",
   "accessSecret": "123456"
 }
