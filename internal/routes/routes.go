@@ -33,6 +33,10 @@ func SetupRoutes(r *gin.Engine) {
 		public.GET("/blogs/search", handlers.SearchBlogs)
 		// GET /blogs/{id} - 获取单篇博客详情
 		public.GET("/blogs/:blogId", handlers.GetBlog)
+		// PUT /blogs/like - 点赞博客
+		public.PUT("/blogs/like", handlers.LikeBlog)
+		// PUT /blogs/unlike - 取消点赞博客
+		public.PUT("/blogs/unlike", handlers.UnLikeBlog)
 
 		// 标签相关
 		// GET /tags - 获取所有标签

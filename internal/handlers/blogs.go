@@ -40,6 +40,9 @@ func InsertBlog(c *gin.Context) {
 	blog.UpdatedAt = time.Now()
 	blog.CreatedAt = time.Now()
 	blog.Views = 0
+	blog.Like = 0
+	blog.LikeCount = 0
+	blog.UnLikeCount = 0
 
 	tagsDB := utils.GetCollection("tags")
 	for _, tag := range blog.Tags {
@@ -147,11 +150,14 @@ func ReSetBlog(c *gin.Context) {
 
 	update := bson.M{
 		"$set": bson.M{
-			"title":     updatedBlog.Title,
-			"tags":      updatedBlog.Tags,
-			"content":   updatedBlog.Content,
-			"updatedAt": time.Now(),
-			"views":     oldBlog.Views,
+			"title":       updatedBlog.Title,
+			"tags":        updatedBlog.Tags,
+			"content":     updatedBlog.Content,
+			"updatedAt":   time.Now(),
+			"views":       oldBlog.Views,
+			"like":        oldBlog.Like,
+			"likeCount":   oldBlog.LikeCount,
+			"unlikeCount": oldBlog.UnLikeCount,
 		},
 	}
 
@@ -190,14 +196,101 @@ func GetBlog(c *gin.Context) {
 	}
 
 	respondData(c, http.StatusOK, gin.H{
-		"_id":       blog.ID.Hex(),
-		"title":     blog.Title,
-		"content":   blog.Content,
-		"tags":      blog.Tags,
-		"createdAt": blog.CreatedAt,
-		"updatedAt": blog.UpdatedAt,
-		"views":     blog.Views,
+		"_id":         blog.ID.Hex(),
+		"title":       blog.Title,
+		"content":     blog.Content,
+		"tags":        blog.Tags,
+		"createdAt":   blog.CreatedAt,
+		"updatedAt":   blog.UpdatedAt,
+		"views":       blog.Views,
+		"like":        blog.Like,
+		"likeCount":   blog.LikeCount,
+		"unlikeCount": blog.UnLikeCount,
 	})
+}
+
+// LikeBlog 给博客点赞
+func LikeBlog(c *gin.Context) {
+	var data struct {
+		ID string `json:"_id"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		respondError(c, http.StatusBadRequest, "无效的请求数据: "+err.Error())
+		return
+	}
+
+	id, err := primitive.ObjectIDFromHex(data.ID)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "无效的博客ID格式")
+		return
+	}
+
+	db := utils.GetCollection("blogs")
+	result, err := db.UpdateByID(context.Background(), id, bson.M{
+		"$inc": bson.M{
+			"like":      1,
+			"likeCount": 1,
+		},
+	})
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "点赞失败: "+err.Error())
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		respondError(c, http.StatusNotFound, "该博客不存在")
+		return
+	}
+
+	respondMessage(c, http.StatusOK, "博客点赞成功")
+}
+
+// UnLikeBlog 取消博客点赞
+func UnLikeBlog(c *gin.Context) {
+	var data struct {
+		ID string `json:"_id"`
+	}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		respondError(c, http.StatusBadRequest, "无效的请求数据: "+err.Error())
+		return
+	}
+
+	id, err := primitive.ObjectIDFromHex(data.ID)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "无效的博客ID格式")
+		return
+	}
+
+	db := utils.GetCollection("blogs")
+	filter := bson.M{
+		"_id":  id,
+		"like": bson.M{"$gt": 0},
+	}
+	update := bson.M{
+		"$inc": bson.M{
+			"like":        -1,
+			"unlikeCount": 1,
+		},
+	}
+
+	result, err := db.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "取消点赞失败: "+err.Error())
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		var blog models.Blog
+		err := db.FindOne(context.Background(), bson.M{"_id": id}).Decode(&blog)
+		if err != nil {
+			respondError(c, http.StatusNotFound, "该博客不存在")
+		} else {
+			respondError(c, http.StatusBadRequest, "点赞数已经是0，无法取消点赞")
+		}
+		return
+	}
+
+	respondMessage(c, http.StatusOK, "博客取消点赞成功")
 }
 
 // DeleteBlog 删除博客
@@ -251,17 +344,23 @@ type rep struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 	Views        int       `json:"views"`
+	Like         int       `json:"like"`
+	LikeCount    int       `json:"likeCount"`
+	UnLikeCount  int       `json:"unlikeCount"`
 	CommentCount int64     `json:"commentCount"`
 }
 
 type blogDetail struct {
-	ID        primitive.ObjectID `bson:"_id"`
-	Title     string             `bson:"title"`
-	Content   string             `bson:"content"`
-	Tags      []string           `bson:"tags"`
-	CreatedAt time.Time          `bson:"createdAt"`
-	UpdatedAt time.Time          `bson:"updatedAt"`
-	Views     int                `bson:"views"`
+	ID          primitive.ObjectID `bson:"_id"`
+	Title       string             `bson:"title"`
+	Content     string             `bson:"content"`
+	Tags        []string           `bson:"tags"`
+	CreatedAt   time.Time          `bson:"createdAt"`
+	UpdatedAt   time.Time          `bson:"updatedAt"`
+	Views       int                `bson:"views"`
+	Like        int                `bson:"like"`
+	LikeCount   int                `bson:"likeCount"`
+	UnLikeCount int                `bson:"unlikeCount"`
 }
 
 func getCommentCountsByBlogIDs(blogIDs []primitive.ObjectID) (map[string]int64, error) {
@@ -343,12 +442,15 @@ func GetBlogs(c *gin.Context) {
 		}
 
 		blogs = append(blogs, rep{
-			ID:        blog.ID,
-			Title:     blog.Title,
-			Tags:      blog.Tags,
-			CreatedAt: blog.CreatedAt,
-			UpdatedAt: blog.UpdatedAt,
-			Views:     blog.Views,
+			ID:          blog.ID,
+			Title:       blog.Title,
+			Tags:        blog.Tags,
+			CreatedAt:   blog.CreatedAt,
+			UpdatedAt:   blog.UpdatedAt,
+			Views:       blog.Views,
+			Like:        blog.Like,
+			LikeCount:   blog.LikeCount,
+			UnLikeCount: blog.UnLikeCount,
 		})
 	}
 
@@ -426,8 +528,28 @@ func SearchBlogs(c *gin.Context) {
 	}()
 
 	var blogs []rep
-	if err = cursor.All(context.Background(), &blogs); err != nil {
-		respondError(c, http.StatusInternalServerError, "解码博客数据失败: "+err.Error())
+	for cursor.Next(context.Background()) {
+		var blog models.Blog
+		if err := cursor.Decode(&blog); err != nil {
+			respondError(c, http.StatusInternalServerError, "解码博客数据失败: "+err.Error())
+			return
+		}
+
+		blogs = append(blogs, rep{
+			ID:          blog.ID,
+			Title:       blog.Title,
+			Tags:        blog.Tags,
+			CreatedAt:   blog.CreatedAt,
+			UpdatedAt:   blog.UpdatedAt,
+			Views:       blog.Views,
+			Like:        blog.Like,
+			LikeCount:   blog.LikeCount,
+			UnLikeCount: blog.UnLikeCount,
+		})
+	}
+
+	if err := cursor.Err(); err != nil {
+		respondError(c, http.StatusInternalServerError, "游标错误: "+err.Error())
 		return
 	}
 
