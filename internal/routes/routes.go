@@ -9,6 +9,8 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
+	r.Static("/images", "docs/Tanya_xiaomai/images")
+
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(404, gin.H{
 			"error":   "请求的接口不存在",
