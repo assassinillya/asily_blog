@@ -32,9 +32,14 @@ const (
 var imageRefPattern = regexp.MustCompile(`!\[[^\]]*]\(([^)]+)\)`)
 
 type markdownMeta struct {
-	CreatedAt string `json:"created_at"`
-	ReadCount int    `json:"read_count"`
-	LikeCount int    `json:"like_count"`
+	UpdatedAt     string `json:"updated_at"`
+	UpdatedAtAlt  string `json:"updatedAt"`
+	CreatedAt     string `json:"created_at"`
+	CreatedAtAlt  string `json:"createdAt"`
+	ReadCount     int    `json:"read_count"`
+	ReadCountAlt  int    `json:"readCount"`
+	LikeCount     int    `json:"like_count"`
+	LikeCountAlt  int    `json:"likeCount"`
 }
 
 type importPost struct {
@@ -45,8 +50,10 @@ type importPost struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	Views      int
+	Like       int
 	LikeCount  int
 	ImageRefs  []string
+	ImagePaths []string
 }
 
 type importImage struct {
@@ -157,6 +164,7 @@ func collectImportData(docsDir string) ([]importPost, []importImage, []string, e
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("collect images for %s: %w", name, err)
 		}
+		post.ImagePaths = imagePathsFromImages(postImages)
 
 		posts = append(posts, post)
 		for _, image := range postImages {
@@ -203,6 +211,16 @@ func parseMarkdownFile(docsDir, file string) (importPost, error) {
 		return importPost{}, fmt.Errorf("parse created_at: %w", err)
 	}
 
+	updatedAtText := meta.UpdatedAt
+	if updatedAtText == "" {
+		updatedAtText = meta.CreatedAt
+	}
+
+	updatedAt, err := time.ParseInLocation("2006-01-02 15:04:05", updatedAtText, location)
+	if err != nil {
+		return importPost{}, fmt.Errorf("parse updated_at: %w", err)
+	}
+
 	body := strings.Join(lines[2:], "\n")
 	title := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
 	sourcePath, err := filepath.Rel(docsDir, file)
@@ -218,8 +236,9 @@ func parseMarkdownFile(docsDir, file string) (importPost, error) {
 		Tags:       tags,
 		Content:    body,
 		CreatedAt:  createdAt,
-		UpdatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
 		Views:      meta.ReadCount,
+		Like:       meta.LikeCount,
 		LikeCount:  meta.LikeCount,
 		ImageRefs:  imageRefs,
 	}, nil
@@ -238,6 +257,20 @@ func parseMetaLine(line string) (markdownMeta, error) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &meta); err != nil {
 		return markdownMeta{}, err
 	}
+
+	if meta.CreatedAt == "" {
+		meta.CreatedAt = meta.CreatedAtAlt
+	}
+	if meta.UpdatedAt == "" {
+		meta.UpdatedAt = meta.UpdatedAtAlt
+	}
+	if meta.ReadCount == 0 && meta.ReadCountAlt != 0 {
+		meta.ReadCount = meta.ReadCountAlt
+	}
+	if meta.LikeCount == 0 && meta.LikeCountAlt != 0 {
+		meta.LikeCount = meta.LikeCountAlt
+	}
+
 	if meta.CreatedAt == "" {
 		return markdownMeta{}, errors.New("created_at is required")
 	}
@@ -315,8 +348,32 @@ func collectImagesForPost(docsDir, file string, post importPost) ([]importImage,
 	return images, nil
 }
 
+func imagePathsFromImages(images []importImage) []string {
+	if len(images) == 0 {
+		return nil
+	}
+
+	paths := make([]string, 0, len(images))
+	for _, image := range images {
+		paths = append(paths, image.SourcePath)
+	}
+
+	sort.Strings(paths)
+	return paths
+}
+
 func upsertPosts(ctx context.Context, collection *mongo.Collection, posts []importPost) error {
 	for _, post := range posts {
+		imageRefs := post.ImageRefs
+		if imageRefs == nil {
+			imageRefs = []string{}
+		}
+
+		imagePaths := post.ImagePaths
+		if imagePaths == nil {
+			imagePaths = []string{}
+		}
+
 		update := bson.M{
 			"$set": bson.M{
 				"title":       post.Title,
@@ -326,8 +383,11 @@ func upsertPosts(ctx context.Context, collection *mongo.Collection, posts []impo
 				"createdAt":   post.CreatedAt,
 				"updatedAt":   post.UpdatedAt,
 				"views":       post.Views,
+				"like":        post.Like,
 				"likeCount":   post.LikeCount,
-				"imageRefs":   post.ImageRefs,
+				"unlikeCount": 0,
+				"imageRefs":   imageRefs,
+				"imagePaths":  imagePaths,
 				"importedAt":  time.Now(),
 				"contentType": "markdown",
 			},
